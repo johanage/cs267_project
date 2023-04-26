@@ -1,0 +1,5 @@
+#!/bin/bash
+export NVSHMEM_HOME='/opt/nvidia/hpc_sdk/Linux_x86_64/22.7/comm_libs/nvshmem/'
+#export NVCC_GENCODE='arch=compute_04,code=04'
+#nvcc -rdc=true -ccbin g++ -gencode=$NVCC_GENCODE -I $NVSHMEM_HOME/include $1 -o nvshmem.out -L $NVSHMEM_HOME/lib -lnvshmem -lnvidia-ml -lcuda -lcudart
+nvcc -rdc=true -ccbin g++ -I $NVSHMEM_HOME/include $1 -o nvshmem.out -L $NVSHMEM_HOME/lib -lnvshmem -lnvidia-ml -lcuda -lcudart

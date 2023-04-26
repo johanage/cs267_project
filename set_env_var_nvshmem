@@ -1,0 +1,3 @@
+#!/bin/bash
+export NVSHMEM_LIB="/opt/nvidia/hpc_sdk/Linux_x86_64/22.7/comm_libs/nvshmem/lib"
+export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:$NVSHMEM_LIB"

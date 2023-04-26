@@ -1,0 +1,7 @@
+
+This program initializes an input array and allocates device memory on the first GPU. It then launches the stencil kernel on all GPUs, using nvshmem to communicate data between the GPUs. After computing the stencil on all GPUs, it copies the output back to the host and prints it.
+
+The `nvshmem_barrier_all()` and `nvshmem_quiet()` calls are used to synchronize the communication between the GPUs. The `cudaSetDevice()` call is used to set the current device before launching the kernel. The `cudaMemcpyPeerAsync()` call is used to copy data between devices asynchronously. Finally, the `nvshmem_finalize()` call is used to clean up nvshmem resources.
+
+Note that this is just an example program, and you will need to adapt it to your specific needs. In particular, you may need to adjust the stencil kernel to match the specific stencil operation you want to perform, and you may need to modify the program to work with a different number of GPUs or a different data size.
+

@@ -1,0 +1,3 @@
+/opt/nvidia/hpc_sdk/Linux_x86_64/22.7/comm_libs/nvshmem/
+ nvcc -o mGPU_nvshmem multi-gpu_stencil_nvshmem.cu
+

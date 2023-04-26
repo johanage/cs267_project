@@ -1,0 +1,5 @@
+
+In this code, we first initialize NCCL by creating a communication group consisting of two GPUs with IDs 0 and 1. We then allocate memory on each GPU and initialize the input data on the first GPU. We then synchronize NCCL to send the input data from the first GPU to the second GPU. After that, we perform the stencil operation on both GPUs and synchronize NCCL again to combine the results on the first GPU. Finally, we free the memory and finalize NCCL.
+
+Note that this is just a basic example and you may need to modify the code to suit your specific needs. Also, keep in mind that multi-GPU programming can be complex and requires careful consideration of factors such as data distribution, load balancing, and communication overhead.
+

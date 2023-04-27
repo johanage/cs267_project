@@ -1,0 +1,7 @@
+# freq used commands
+
+# compiling
+nvcc -o out_file cuda_file 
+
+# profiling
+nvprof --print-gpu-trace --devices 0,1,2,3 CUDA-PROGRAM

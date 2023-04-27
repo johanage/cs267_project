@@ -43,7 +43,7 @@ int main()
         cudaSetDevice(gpus[i]);
         for (int j = 0; j < num_gpus; j++) {
             if (i != j) {
-                cudaDeviceEnablePeerAccess(gpus[j], gpus[i]);
+                cudaDeviceEnablePeerAccess(gpus[j], 0);
             }
         }
     }

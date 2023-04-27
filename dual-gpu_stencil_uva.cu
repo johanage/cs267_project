@@ -6,10 +6,13 @@
 #include <cuda.h>
 #include <iostream>
 
-__global__ void stencil_kernel(float *grid, int width, int height) {
+#define GPU1 0
+#define GPU2 1
+
+__global__ void stencil_kernel(float *grid, int width, int height, int sh) {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
-    if (i > 0 && i < width - 1 && j > 0 && j < height - 1)
+    if (i > sh && i < width - 1 && j > 0 && j < height - 1)
     {
         // Compute the new value of the grid point (i, j)
         float new_value = (grid[(i-1)*height+j] + grid[(i+1)*height+j]
@@ -32,12 +35,19 @@ int main() {
     
     // Initialize the grid values on GPU 1
     //printf(" Init grid1: \n");
-    int sum = 0;
-    for (int i = 0; i < int( width*height ); i++) 
+    for (int i = 0; i < int( width ); i++) 
     {
-        grid1[i] = 1;
-	sum += grid1[i];
-	std::cout << sum << " ";
+        for (int j = 0; j < int( height ); j++)
+	{ 
+            if(i <= int(width/2))
+            {
+                grid1[i*height + j] = 1;
+	    }
+            if(i >= int(width/2)-1)
+	    {
+		grid2[i*height + j] = 1;
+	    }
+	}
     }
     
     // Launch the kernel on both GPUs
@@ -49,27 +59,37 @@ int main() {
     dim3 grid2_size( nx, ny );
 
     // prefetching to device
-    int device = -1;
-    cudaGetDevice(&device);
-    cudaMemPrefetchAsync(grid1, width*height*sizeof(int), device, NULL);
-    cudaMemPrefetchAsync(grid2, width*height*sizeof(int), device, NULL);
+    cudaSetDevice(GPU1);
+    cudaMemPrefetchAsync(grid1, width*height*sizeof(int), GPU1, NULL);
+    cudaSetDevice(GPU2);
+    cudaMemPrefetchAsync(grid2, width*height*sizeof(int), GPU1, NULL);
+
+    // enable PtoP communication
+    cudaDeviceEnablePeerAccess(GPU1, 0);
+    cudaSetDevice(GPU1);
+    cudaDeviceEnablePeerAccess(GPU2, 0);
+
 
     for (int iter = 0; iter < num_iterations; ++iter) {
-        stencil_kernel<<<grid1_size, block>>>(grid1, width, height);
-        stencil_kernel<<<grid2_size, block>>>(grid2, width, height);
+        // compute first half on GPU1 
+	//stencil_kernel<<<grid1_size, block>>>(grid1, width, int(height/2), 0);
+	stencil_kernel<<<grid1_size, block>>>(grid1, int(width/2)+1, height, 0 );
+	cudaSetDevice(GPU2);
+        // synchronize with GPU2
+	cudaDeviceSynchronize();
+	// compute other half on GPU2
+	stencil_kernel<<<grid2_size, block>>>(grid2, width, height,int(height/2)-1);
         cudaDeviceSynchronize();
-        // Swap the grids so that the updated values are on the other GPU for the next iteration
-        float *temp = grid1;
-        grid1 = grid2;
-        grid2 = temp;
     }
     // copy from GPU to print results on CPU
     int size_grid = int(width*height); 
     printf("Size of grid %i ", size_grid);
-    float *grid   = new float[size_grid]();
+    float *grid_1   = new float[size_grid]();
     float *grid_2 = new float[size_grid]();
-    cudaMemcpy(grid,   grid1, size_grid*sizeof(int), cudaMemcpyDeviceToHost);
     cudaMemcpy(grid_2, grid2, size_grid*sizeof(int), cudaMemcpyDeviceToHost);
+    // was on GPU2 
+    cudaSetDevice(GPU1);
+    cudaMemcpy(grid_1, grid1, size_grid*sizeof(int), cudaMemcpyDeviceToHost);
     // Free the memory using cudaFree()
     cudaFree(grid1);
     cudaFree(grid2);
@@ -79,9 +99,9 @@ int main() {
         for(int j = 0; j < height; j++)
 	{
 		//std::cout << i*width + j << " : " << grid_2[i*width + j] << " "; // << std::endl;
-		//std::cout << grid[i*width + j] << " "; // << std::endl;
-		std::cout << grid_2[i*width + j] << " "; // << std::endl;
-		//std::cout << grid[i*width + j] + grid_2[i*width + j] << " "; // << std::endl;
+		//std::cout << grid_1[i*width + j] << " "; // << std::endl;
+		//std::cout << grid_2[i*width + j] << " "; // << std::endl;
+		std::cout << grid_1[i*width + j] + grid_2[i*width + j] << " "; // << std::endl;
 	}
 	std::cout << std::endl;
     }

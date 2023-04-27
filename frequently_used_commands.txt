@@ -5,3 +5,6 @@ nvcc -o out_file cuda_file
 
 # profiling
 nvprof --print-gpu-trace --devices 0,1,2,3 CUDA-PROGRAM
+
+# profiling for unified memory
+nvprof --unified-memory-profiling per-process-device --print-gpu-trace UnifiedMemoryStreams

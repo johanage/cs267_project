@@ -1,0 +1,6 @@
+# Set CUDA_VISIBLE_DEVICES to use GPUs 0 and 1
+export CUDA_VISIBLE_DEVICES=0,1
+
+# Compile the stencil example
+nvcc multi-gpu_stencil_uva.cu -o uva.out
+

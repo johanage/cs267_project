@@ -1,90 +1,94 @@
-// This is a 2D stencil example for multi-GPU using CUDA and only UVA
-
-#include <cuda_runtime.h>
-#include <device_launch_parameters.h>
 #include <stdio.h>
-#include <cuda.h>
-#include <iostream>
+#include <cuda_runtime.h>
 
-__global__ void stencil_kernel(float *grid, int width, int height) {
+// Define the kernel function for stencil operation
+__global__ void stencil(int* grid, int N)
+{
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
-    if (i > 0 && i < width - 1 && j > 0 && j < height - 1)
-    {
-        // Compute the new value of the grid point (i, j)
-        float new_value = (grid[(i-1)*height+j] + grid[(i+1)*height+j]
-                            + grid[i*height+j-1] + grid[i*height+j+1]);
-        // Write the new value back to the grid
-        grid[i*height+j] += new_value;
+
+    if (i > 0 && i < N - 1 && j > 0 && j < N - 1) {
+        grid[i * N + j] += (grid[(i - 1) * N + j] + grid[(i + 1) * N + j] + grid[i * N + j - 1] + grid[i * N + j + 1]);
     }
 }
 
-int main() {
-    const int width = 16;
-    const int height = 16;
-    const int num_iterations = 1;
-    const int block_size = 4;
-    
-    // Allocate memory for the grid on both GPUs using cudaMallocManaged()
-    float *grid1, *grid2;
-    cudaMallocManaged(&grid1, width*height*sizeof(float));
-    cudaMallocManaged(&grid2, width*height*sizeof(float));
-    
-    // Initialize the grid values on GPU 1
-    //printf(" Init grid1: \n");
-    int sum = 0;
-    for (int i = 0; i < int( width*height ); i++) 
-    {
-        grid1[i] = 1;
-	sum += grid1[i];
-	std::cout << sum << " ";
-    }
-    
-    // Launch the kernel on both GPUs
-    // threads per block
-    dim3 block(block_size, block_size);
-    int nx = (int)ceil(width/block.x);
-    int ny = (int)ceil(height/block.y);
-    dim3 grid1_size( nx, ny );
-    dim3 grid2_size( nx, ny );
+int main()
+{
+    int num_gpus = 4; // Number of GPUs to use
+    int N = 32; // Size of the grid
+    int size = N * N * sizeof(float); // Size of grid in bytes
+    int threads_per_block = 4; // Number of threads per block
+    int blocks_per_dim = N / threads_per_block; // Number of blocks per dimension
 
-    // prefetching to device
-    int device = -1;
-    cudaGetDevice(&device);
-    cudaMemPrefetchAsync(grid1, width*height*sizeof(int), device, NULL);
-    cudaMemPrefetchAsync(grid2, width*height*sizeof(int), device, NULL);
+    // Initialize the grid on the CPU
+    int* grid = new int[N * N];
+    for (int i = 0; i < N * N; i++) {
+        grid[i] = 1;
+    }
 
-    for (int iter = 0; iter < num_iterations; ++iter) {
-        stencil_kernel<<<grid1_size, block>>>(grid1, width, height);
-        stencil_kernel<<<grid2_size, block>>>(grid2, width, height);
-        cudaDeviceSynchronize();
-        // Swap the grids so that the updated values are on the other GPU for the next iteration
-        float *temp = grid1;
-        grid1 = grid2;
-        grid2 = temp;
+    // Declare arrays to hold device pointers and GPU IDs
+    int** grid_dev = new int*[num_gpus];
+    int* gpus = new int[num_gpus];
+
+    // Initialize the GPUs and device pointers
+    for (int i = 0; i < num_gpus; i++) {
+        cudaSetDevice(i);
+        cudaMalloc(&grid_dev[i], size / num_gpus);
+        cudaMemcpy(&grid_dev[i][(N / num_gpus) * N], &grid[(N / num_gpus) * N * i], size / num_gpus, cudaMemcpyHostToDevice);
+        gpus[i] = i;
     }
-    // copy from GPU to print results on CPU
-    int size_grid = int(width*height); 
-    printf("Size of grid %i ", size_grid);
-    float *grid   = new float[size_grid]();
-    float *grid_2 = new float[size_grid]();
-    cudaMemcpy(grid,   grid1, size_grid*sizeof(int), cudaMemcpyDeviceToHost);
-    cudaMemcpy(grid_2, grid2, size_grid*sizeof(int), cudaMemcpyDeviceToHost);
-    // Free the memory using cudaFree()
-    cudaFree(grid1);
-    cudaFree(grid2);
-    printf("Printing the output of the 2D stencil example\n");
-    for(int i = 0; i < width; i++)
-    {
-        for(int j = 0; j < height; j++)
-	{
-		//std::cout << i*width + j << " : " << grid_2[i*width + j] << " "; // << std::endl;
-		//std::cout << grid[i*width + j] << " "; // << std::endl;
-		std::cout << grid_2[i*width + j] << " "; // << std::endl;
-		//std::cout << grid[i*width + j] + grid_2[i*width + j] << " "; // << std::endl;
-	}
-	std::cout << std::endl;
+
+    // Enable peer-to-peer access between GPUs
+    for (int i = 0; i < num_gpus; i++) {
+        cudaSetDevice(gpus[i]);
+        for (int j = 0; j < num_gpus; j++) {
+            if (i != j) {
+                cudaDeviceEnablePeerAccess(gpus[j], gpus[i]);
+            }
+        }
     }
+
+    // Launch the kernel on each GPU
+    dim3 threads(threads_per_block, threads_per_block);
+    for (int iter = 0; iter < 1; iter++) {
+        for (int i = 0; i < num_gpus; i++) {
+            cudaSetDevice(gpus[i]);
+            dim3 blocks(blocks_per_dim / num_gpus, blocks_per_dim);
+            stencil<<<blocks, threads>>>(grid_dev[i], N / num_gpus);
+
+            // Synchronize with other GPUs
+            for (int j = 0; j < num_gpus; j++) {
+                if (i != j) {
+                    cudaSetDevice(gpus[j]);
+                    cudaDeviceSynchronize();
+                }
+            }
+        }
+    }
+
+    // Copy the results back to the CPU and print them out
+    for (int i = 0; i < num_gpus; i++) {
+        cudaSetDevice(gpus[i]);
+        cudaMemcpy(&grid[(N / num_gpus) * N * i], &grid_dev[i][(N / num_gpus) * N], size / num_gpus, cudaMemcpyDeviceToHost);
+    }
+    // Print the results
+    printf("Results:\n");
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            printf("%i ", grid[i * N + j]);
+        }
+        printf("\n");
+    }
+
+    // Free the memory
+    for (int i = 0; i < num_gpus; i++) {
+        cudaSetDevice(gpus[i]);
+        cudaFree(grid_dev[i]);
+        cudaDeviceReset();
+    }
+    delete[] grid;
+    delete[] grid_dev;
+    delete[] gpus;
+
     return 0;
 }
-

@@ -8,14 +8,15 @@ __global__ void stencil(int* grid, int N)
     int j = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (i > 0 && i < N - 1 && j > 0 && j < N - 1) {
-        grid[i * N + j] += (grid[(i - 1) * N + j] + grid[(i + 1) * N + j] + grid[i * N + j - 1] + grid[i * N + j + 1]);
+        int new_value = (grid[(i - 1) * N + j] + grid[(i + 1) * N + j] + grid[i * N + j - 1] + grid[i * N + j + 1]);
+        grid[i * N + j] += new_value +1 ; 
     }
 }
 
 int main()
 {
     int num_gpus = 4; // Number of GPUs to use
-    int N = 32; // Size of the grid
+    int N = 8; // Size of the grid
     int size = N * N * sizeof(float); // Size of grid in bytes
     int threads_per_block = 4; // Number of threads per block
     int blocks_per_dim = N / threads_per_block; // Number of blocks per dimension

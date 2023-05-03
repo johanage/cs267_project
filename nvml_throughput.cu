@@ -1,26 +1,46 @@
-unsigned int devices_count {};
+#include <iostream>
+#include <stdio.h>
+#include <nvml.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
 
-nvmlInit ();
-nvmlDeviceGetCount (&devices_count);
+// define field value enums
+#define NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_TX 138
+#define NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_RX 139
 
-nvmlDevice_t device;
-nvmlDeviceGetHandleByIndex (0, &device);
+int main(){
+        unsigned int devices_count {};
 
-nvmlNvLinkUtilizationControl_t utilization_control;
-utilization_control.units = NVML_NVLINK_COUNTER_UNIT_BYTES;
-utilization_control.pktfilter = NVML_NVLINK_COUNTER_PKTFILTER_ALL;
-nvmlDeviceFreezeNvLinkUtilizationCounter (device, 0, 0, NVML_FEATURE_DISABLED);
-nvmlDeviceSetNvLinkUtilizationControl (device, 0, 0, &utilization_control, 1);
+	nvmlInit ();
+	nvmlDeviceGetCount (&devices_count);
 
-unsigned long long int tx_before {};
-unsigned long long int rx_before {};
-nvmlDeviceGetNvLinkUtilizationCounter (device, 0, 0, &rx_before, &tx_before);
+	nvmlDevice_t device;
+	nvmlDeviceGetHandleByIndex (0, &device);
 
-// code to measure
+	nvmlFieldValue_t field;
+	field.scopeId = 0;
+	field.fieldId = NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_TX;
+	nvmlDeviceGetFieldValues (device, 1, &field);
+	const unsigned long long int initial_tx = field.value.ullVal;
 
-unsigned long long int tx_after {};
-unsigned long long int rx_after {};
-nvmlDeviceGetNvLinkUtilizationCounter (device, 0, 0, &rx_after, &tx_after);
+	field.fieldId = NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_RX;
+	nvmlDeviceGetFieldValues (device, 1, &field);
+	const unsigned long long int initial_rx = field.value.ullVal;
 
-const unsigned long long int tx = tx_after - tx_before;
-const unsigned long long int rx = rx_after - rx_before;
+	// code to measure
+
+	field.fieldId = NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_TX;
+	nvmlDeviceGetFieldValues (device, 1, &field);
+	const unsigned long long int final_tx = field.value.ullVal;
+
+	field.fieldId = NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_RX;
+	nvmlDeviceGetFieldValues (device, 1, &field);
+	const unsigned long long int final_rx = field.value.ullVal;
+
+	const unsigned int rx = final_rx - initial_rx;
+	const unsigned int tx = final_tx - initial_tx;
+	printf("transmission time %i", tx);
+	printf("recieve      time %i", rx);
+	return 0;
+}
+

@@ -1,5 +1,5 @@
-#import <cuda.h>
-#import <iostream>
+#include <cuda.h>
+#include <iostream>
 void print_ptr_dev (int max_depth, int current_depth = 0)
 {
   cudaSetDevice (current_depth % 2);

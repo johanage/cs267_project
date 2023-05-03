@@ -32,25 +32,15 @@ int main() {
     float *grid1, *grid2;
     // allocate using malloc managed
     int gridsize = (int)ceil(width*height/2); // remove div. by 2
-    cudaMallocManaged(&grid1, gridsize*sizeof(float));
-    cudaMallocManaged(&grid2, gridsize*sizeof(float));// remove div. by 2;
+    cudaMallocManaged(&grid1, gridsize*sizeof(int));
+    cudaMallocManaged(&grid2, gridsize*sizeof(int));// remove div. by 2;
     
     // Initialize the grid values on GPU 1
     //printf(" Init grid1: \n");
-    for (int i = 0; i < int( width ); i++) 
+    for (int i = 0; i < gridsize; i++) 
     {
-        for (int j = 0; j < int( height ); j++)
-	{ 
-            if(i <= int(width/2))
-            {
-                grid1[i*height + j] = 1;
-	    }
-            if(i >= int(width/2)-1)
-	    {
-		int ind = (i*height + j)%gridsize;
-                grid2[ind] = 1;
-	    }
-	}
+	grid1[i] = 1;
+	grid2[i] = 1;
     }
     
     // Launch the kernel on both GPUs
@@ -84,7 +74,7 @@ int main() {
     for (int iter = 0; iter < num_iterations; ++iter) {
         // compute first half on GPU1 
 	//stencil_kernel<<<grid1_size, block>>>(grid1, width, int(height/2), 0);
-	stencil_kernel<<<grid1_size, block>>>(grid1,width, int(height/2), 0);
+	stencil_kernel<<<grid1_size, block>>>(grid1, width, int(height/2), 0);
 	//cudaSetDevice(GPU2);
         // synchronize with GPU2
 	//cudaDeviceSynchronize();
@@ -97,9 +87,9 @@ int main() {
     // work on half of the domain
     float *grid_1 = new float[gridsize]();
     float *grid_2 = new float[gridsize]();
-    cudaMemcpy(grid_2, grid2, gridsize*sizeof(int), cudaMemcpyDeviceToHost);
+    //cudaMemcpy(grid_2, grid2, gridsize*sizeof(int), cudaMemcpyDeviceToHost);
     // was on GPU2 
-    cudaSetDevice(GPU1);
+    //cudaSetDevice(GPU1);
     cudaMemcpy(grid_1, grid1, gridsize*sizeof(int), cudaMemcpyDeviceToHost);
     
     // Free the memory using cudaFree()
@@ -109,23 +99,24 @@ int main() {
     // here GPUs have half sized grids
     // so results needs to be stiched together when copying from devices to host
     int size_grid = int(width*height); 
-    float *grid = new float[size_grid];
-    for (int i = 0; i < int( width ); i++)
+    int *grid = new int[size_grid];
+    int ind_grid1 = 0;
+    for(int i = 0; i < width; i++)
     {
-        for (int j = 0; j < int( height ); j++)
+        for(int j = 0; j < height; j++)
         {
-            if(i <= int(width/2))
-            {
-                grid[i*height + j] = grid_1[i*height + j];
-            }
-            if(i >= int(width/2)-1)
-            {
-		//int ind = (i*height + j)%gridsize;
-                //grid[i*height + j] = grid_2[ind];
-            }
+	    int ind = i*int(height/2) + j;
+	    if (j < int(height/2)){
+	        printf(" index %i", ind);
+		grid[ind] = grid_1[ind_grid1];
+		ind_grid1 += 1;
+	    }
+	    //grid[i] = grid_2[i];
+	    else{
+                grid[ind] = 0;
+	    }
         }
     }
-
 
     // print results
     printf("Printing the output of the 2D stencil example\n");

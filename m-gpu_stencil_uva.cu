@@ -24,12 +24,15 @@ int main() {
     const int height = 16;
     const int num_iterations = 1;
     const int block_size = 4;
-    const int ngpus = 2;
+    const int ngpus = 4;
     //cudaGetDeviceCount(&ngpus);
     printf("ngpus %i\n", ngpus);
     //assert(ngpus != 4);
     int* gpus = new int[ngpus];
-    gpus[0] = 0; gpus[1] = 1;
+    for(int i = 0; i < ngpus; i++){
+	    gpus[i] = i;
+    }
+    //gpus[0] = 0; gpus[1] = 1;
     // Allocate memory for the grid on both GPUs using cudaMallocManaged()
     int **grid_dev = new int*[ngpus];
     // allocate using malloc managed
@@ -57,23 +60,11 @@ int main() {
     }
 
     int is_able;
-    cudaDeviceCanAccessPeer(&is_able, gpus[1], gpus[0]);
-    if(is_able){
-        cudaDeviceEnablePeerAccess(gpus[0], 0);
-    }
-    printf("Can GPU %i access GPU %i? %i \n", gpus[0], gpus[1], is_able);
-    cudaSetDevice(gpus[0]);
-    cudaDeviceCanAccessPeer(&is_able, gpus[0], gpus[1]);
-    if(is_able){
-        cudaDeviceEnablePeerAccess(gpus[1], 0);
-    }
-    printf("Can GPU %i access GPU %i? %i \n", gpus[1], gpus[0], is_able);
-    /*
     for(int i = 0; i < ngpus; i++){
         cudaSetDevice(gpus[i]);
 	// enable PtoP communication
 	// check if GPU i can access GPU j
-	for(int j = 0; i < ngpus; j++){
+	for(int j = 0; j < ngpus; j++){
             if(gpus[i] != gpus[j]){
 		cudaDeviceCanAccessPeer(&is_able, gpus[i], gpus[j]);
                 printf("Can GPU %i access GPU %i? %i \n", gpus[j], gpus[i], is_able);
@@ -83,7 +74,7 @@ int main() {
 	    }
         }
     }
-    */
+    
     
     // Launch the kernel on both GPUs
     // threads per block
@@ -99,10 +90,17 @@ int main() {
 	    // set device
 	    cudaSetDevice(gpus[i]);
             // compute first half on GPU1
-	    stencil_kernel<<<grid_size, block>>>(grid_dev[i], width, height_partition, 0, height_partition);
-            
+	    if(i==0){
+	        stencil_kernel<<<grid_size, block>>>(grid_dev[i], width, height_partition, 0, height_partition);
+	    }
+	    else if(i==ngpus-1){
+	        stencil_kernel<<<grid_size, block>>>(grid_dev[i], width, height_partition, -1, height_partition-1);
+	    }
+	    else{
+	        stencil_kernel<<<grid_size, block>>>(grid_dev[i], width, height_partition, -1, height_partition);
+            }
 	    // synchronize with GPU i
-	    for(int j = 0; i < ngpus; j++){
+	    for(int j = 0; j < ngpus; j++){
                 if(i!=j){
 		    cudaSetDevice(gpus[j]);
 	            cudaDeviceSynchronize();
@@ -113,12 +111,14 @@ int main() {
     // copy from GPU to print results on CPU using memcpy
     // here the GPUs have the full size grid and only
     // work on half of the domain
-    int** grid_ngpu = new int*[gridsize]();
+    int** grid_ngpu = new int*[ngpus]();
     for(int i = 0; i < ngpus; i++){
 	// set device, is this necessary though?
         cudaSetDevice(gpus[i]);
+        // allocate host mem
+	grid_ngpu[i] = new int[gridsize]();
 	// copy from gpu i to host
-        cudaMemcpy(grid_ngpu[i], grid_dev[i], gridsize*sizeof(int), cudaMemcpyDeviceToHost);
+        cudaMemcpy(grid_ngpu[i], grid_dev[i], gridsize*sizeof(int), cudaMemcpyDefault);
     }
     for(int i = 0; i < ngpus; i++){
         // Free the memory using cudaFree()
@@ -128,7 +128,7 @@ int main() {
     // here GPUs have half sized grids
     // so results needs to be stiched together when copying from devices to host
     int size_grid  = int(width*height); 
-    int *grid_full = new int[size_grid];
+    int *grid_full = new int[size_grid]();
     int* ind_grid  = new int[ngpus]();
     for(int i = 0; i < width; i++)
     {
@@ -136,8 +136,8 @@ int main() {
         {
 	    int ind = i*height + j;
 	    for(int k=0; k <= ngpus; k++){    
-                if (k*height_partition < j && j < (k+1)*height_partition){
-		    printf("%i", ind_grid[k]);
+                if (k*height_partition <= j && j < (k+1)*height_partition){
+		    //printf("%i", ind_grid[k]);
 		    grid_full[ind] = grid_ngpu[k][ind_grid[k]];
 		    ind_grid[k] += 1;
 		}

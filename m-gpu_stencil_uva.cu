@@ -20,14 +20,12 @@ __global__ void stencil_kernel(int *grid, int width, int height, int sh, int eh)
 }
 
 int main() {
-    const int width  = 16;
-    const int height = 16;
+    const int width  = 2048;
+    const int height = 2048;
     const int num_iterations = 1;
     const int block_size = 4;
     const int ngpus = 4;
-    //cudaGetDeviceCount(&ngpus);
     printf("ngpus %i\n", ngpus);
-    //assert(ngpus != 4);
     int* gpus = new int[ngpus];
     for(int i = 0; i < ngpus; i++){
 	    gpus[i] = i;
@@ -38,6 +36,12 @@ int main() {
     // allocate using malloc managed
     // just divide the allocated memory by the nr of gpus
     int gridsize = (int)ceil(width*height/ngpus);
+    
+    // event experiment to measure the init memory transfer
+    cudaEvent_t begin_mem, end_mem;
+    cudaEventCreate(&begin_mem);
+    cudaEventCreate(&end_mem);
+    
     // set device id in array gpus 
     // allocation to UVA for each GPU
     for(int i = 0; i < ngpus; i++){
@@ -58,6 +62,14 @@ int main() {
         cudaSetDevice(gpus[i]);
         cudaMemPrefetchAsync(grid_dev[i], gridsize*sizeof(int), gpus[i], NULL);
     }
+    cudaEventRecord(end_mem);
+    cudaEventSynchronize(end_mem);
+    float runtime_init_mem;
+    cudaEventElapsedTime(&runtime_init_mem, begin_mem, end_mem);
+    printf("The inital memory allocation and assignment took %f ms\n", runtime_init_mem);
+    cudaEventDestroy(end_mem);
+    cudaEventDestroy(begin_mem);
+
 
     int is_able;
     for(int i = 0; i < ngpus; i++){
@@ -75,6 +87,10 @@ int main() {
         }
     }
     
+    // event experiment to measure computation time
+    cudaEvent_t begin, end;
+    cudaEventCreate(&begin);
+    cudaEventCreate(&end); 
     
     // Launch the kernel on both GPUs
     // threads per block
@@ -85,6 +101,7 @@ int main() {
     int ny = (int)ceil(height/block.y);
     dim3 grid_size( nx, ny );
     int height_partition = int(height/ngpus);
+    cudaEventRecord(begin);
     for (int iter = 0; iter < num_iterations; ++iter) {
         for(int i = 0; i < ngpus; i++){
 	    // set device
@@ -108,6 +125,22 @@ int main() {
             }
         }
     }
+    cudaEventRecord(end);
+    cudaEventSynchronize(end);
+    float runtime_computation;
+    cudaEventElapsedTime(&runtime_computation, begin, end);
+    //runtime_computation /= 1000; // given in ms
+    printf("The kernel computation took %f ms\n", runtime_computation);
+    cudaEventDestroy(end);
+    cudaEventDestroy(begin);
+   
+
+    // event experiment to measure the init memory transfer
+    cudaEvent_t begin_mem2, end_mem2;
+    cudaEventCreate(&begin_mem2);
+    cudaEventCreate(&end_mem2);
+ 
+    
     // copy from GPU to print results on CPU using memcpy
     // here the GPUs have the full size grid and only
     // work on half of the domain
@@ -124,6 +157,14 @@ int main() {
         // Free the memory using cudaFree()
         cudaFree(grid_dev[i]);
     }
+
+    cudaEventRecord(end_mem2);
+    cudaEventSynchronize(end_mem2);
+    float runtime_mem2;
+    cudaEventElapsedTime(&runtime_mem2, begin_mem2, end_mem2);
+    printf("Copying from devices to host took %f ms\n", runtime_mem2);
+    cudaEventDestroy(end_mem2);
+    cudaEventDestroy(begin_mem2);
 
     // here GPUs have half sized grids
     // so results needs to be stiched together when copying from devices to host
@@ -146,6 +187,7 @@ int main() {
     }
 
     // print results
+    /*
     printf("Printing the output of the 2D stencil example\n");
     for(int i = 0; i < width; i++)
     {
@@ -155,6 +197,7 @@ int main() {
 	}
 	std::cout << std::endl;
     }
+    */
     return 0;
 }
 

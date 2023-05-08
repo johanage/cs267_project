@@ -1,5 +1,8 @@
 # freq used commands
 
+# to check the topology of the system in matrix format
+nvidia-smi topo 
+
 # compiling
 nvcc -o out_file cuda_file 
 

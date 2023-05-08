@@ -11,7 +11,7 @@
 int main(){
         unsigned int devices_count {};
 
-	nvmlInit ();
+	nvmlInit_v2();
 	nvmlDeviceGetCount (&devices_count);
 
 	nvmlDevice_t device;
@@ -35,12 +35,14 @@ int main(){
 
 	field.fieldId = NVML_FI_DEV_NVLINK_THROUGHPUT_DATA_RX;
 	nvmlDeviceGetFieldValues (device, 1, &field);
+	nvmlShutdown();
 	const unsigned long long int final_rx = field.value.ullVal;
 
 	const unsigned int rx = final_rx - initial_rx;
 	const unsigned int tx = final_tx - initial_tx;
 	printf("transmission time %i", tx);
 	printf("recieve      time %i", rx);
+	
 	return 0;
 }
 
